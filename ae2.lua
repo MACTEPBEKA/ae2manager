@@ -544,53 +544,74 @@ function buildGui()
     local itemListSearch = configView:addChild(GUI.input(2, 2, configView.width/2-1, 3,
             C_INPUT, C_INPUT_TEXT, C_INPUT_TEXT, C_STATUS_PRESSED, C_INPUT_TEXT, '', 'Поиск'))
 
-    -- TODO: add unconfigured/hidden filter
-
     local itemListPanel = configView:addChild(GUI.list(
             itemListSearch.x, itemListSearch.y + itemListSearch.height + 1, itemListSearch.width, configView.height-itemListSearch.height-3,
             1, 0, C_BADGE, C_BADGE_TEXT, C_STATUS_BAR, C_STATUS_TEXT, C_BADGE_SELECTED, C_BADGE_TEXT
     ))
     itemListPanel.selectedItem = -1
     --itemListPanel:setAlignment(GUI.ALIGNMENT_HORIZONTAL_LEFT, GUI.ALIGNMENT_VERTICAL_TOP)
-    attachScrollbar(itemListPanel)
-
-    override(itemListPanel, 'draw', function (super, self, ...)
-        self.selectedItem = -1
-        self.children = {}
-
-        local selection = recipes
-        local filter = itemListSearch.text
-        if filter and filter ~= '' then
-            filter = unicode.lower(filter)
-            selection = {}
-            self.scrollBar.value = self.scrollBar.minimumValue
-            for _, recipe in ipairs(recipes) do
-                -- Patterns seem very limited, no case-insensitive option
-                if unicode.lower(recipe.label):find(filter) then
-                    table.insert(selection, recipe)
-                end
-            end
+    -- attachScrollbar(itemListPanel)
+	
+	local sbWidth = (itemListPanel.width > 60) and 2 or 1
+	itemListPanel.width = itemListPanel.width - sbWidth
+    local itemListScrollBar = GUI.scrollBar(itemListPanel.x+itemListPanel.width, itemListPanel.y, sbWidth, itemListPanel.height, C_SCROLLBAR_BACKGROUND, C_SCROLLBAR,
+            0, 1, 0, 1, 4, false)
+	itemListPanel.parent:addChild(itemListScrollBar)
+	itemListPanel.scrollBar = itemListScrollBar
+	
+	override(itemListPanel, 'eventHandler', function (super, app, self, key, ...)
+        if key == 'scroll' then -- forward scrolls on the main object to the scrollbar
+            itemListScrollBar.eventHandler(app, itemListScrollBar, key, ...)
         end
-
-        self.scrollBar.maximumValue = math.max(0, #selection - self.height)
-        self.scrollBar.shownValueCount =  self.scrollBar.maximumValue / (self.scrollBar.maximumValue + 1)
-
-        local offset = self.scrollBar.value
-        for i = 1, math.min(self.height, #selection) do
-            local recipe = selection[offset + i]
-            local choice = self:addItem(recipe.label)
-            --choice.colors.default.background = (recipe.error ~= nil) and C_BADGE_ERR or recipe.wanted > 0 and C_BADGE_BUSY or C_BADGE
-            if recipe == configView[SYMBOL_CONFIG_RECIPE] then
-                self.selectedItem = i
-            end
-            choice.onTouch = function(app, object)
-                configView[SYMBOL_CONFIG_RECIPE] = recipe
-                event.push('config_recipe_change')
-            end
-        end
-
-        super(self, ...)
+        super(app, self, key, ...)
     end)
+	
+	override(itemListScrollBar, 'eventHandler', function (super, app, self, key, ...)
+        if key == 'touch' then
+			GUI.alert("Теперь эта кривая хуйня не крашит. //мастер") --Если не нужно оповещение удалите)
+			return
+		end
+        super(app, self, key, ...)
+    end)
+	
+	override(itemListPanel, 'draw', function (super, self, ...)
+		self.selectedItem = -1
+		self.children = {}
+		
+		local selection = recipes
+		local filter = itemListSearch.text
+		
+		if filter and filter ~= '' then
+			filter = unicode.lower(filter)
+			selection = {}
+			self.scrollBar.value = self.scrollBar.minimumValue
+			for _, recipe in ipairs(recipes) do
+				-- Patterns seem very limited, no case-insensitive option
+				if unicode.lower(recipe.label):find(filter) then
+					table.insert(selection, recipe)
+				end
+			end
+		end
+		
+		self.scrollBar.maximumValue = math.max(0, #selection - self.height)
+		self.scrollBar.shownValueCount =  self.scrollBar.maximumValue / (self.scrollBar.maximumValue + 1)
+
+		local offset = self.scrollBar.value
+		for i = 1, math.min(self.height, #selection) do
+			local recipe = selection[offset + i]
+			local choice = self:addItem(recipe.label)
+			--choice.colors.default.background = (recipe.error ~= nil) and C_BADGE_ERR or recipe.wanted > 0 and C_BADGE_BUSY or C_BADGE
+			if recipe == configView[SYMBOL_CONFIG_RECIPE] then
+				self.selectedItem = i
+			end
+			choice.onTouch = function(app, object)
+				configView[SYMBOL_CONFIG_RECIPE] = recipe
+				event.push('config_recipe_change')
+			end
+		end
+
+		super(self, ...)
+	end)
 
     -- right panel (item details)
     local reloadBtn = configView:addChild(GUI.button(configView.width/2+2, 2, configView.width/2-2, 3,
@@ -655,6 +676,7 @@ function buildGui()
     cfgBtn.onTouch = function(app, object)
         configView.hidden = not object.pressed
     end
+	
     statusBar:addChild(GUI.button(statusBar.width - 6, 1, 8, 1, C_STATUS_BAR, C_STATUS_TEXT, C_STATUS_BAR, C_STATUS_PRESSED, '[Выход]')).onTouch = function(app, object)
         event.push('exit')
     end
@@ -663,24 +685,6 @@ function buildGui()
     end
 	
     return app
-end
-
-function attachScrollbar(obj)
-    local width = (obj.width > 60) and 2 or 1
-    obj.width = obj.width - width
-    local bar = GUI.scrollBar(obj.x+obj.width, obj.y, width, obj.height, C_SCROLLBAR_BACKGROUND, C_SCROLLBAR,
-            0, 1, 0, 1, 4, false)
-    obj.parent:addChild(bar)
-    obj.scrollBar = bar
-
-    override(obj, 'eventHandler', function (super, app, self, key, ...)
-        if key == 'scroll' then -- forward scrolls on the main object to the scrollbar
-            bar.eventHandler(app, bar, key, ...)
-        end
-        super(app, self, key, ...)
-    end)
-
-    return bar
 end
 
 -- Start the program
